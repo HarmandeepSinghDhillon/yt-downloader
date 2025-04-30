@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #ff0000;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input[type="url"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .radio-group {
+            margin-top: 10px;
+        }
+
+        .radio-group label {
+            margin-right: 20px;
+            cursor: pointer;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #cc0000;
+        }
+
+        #progress-container {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            display: none;
+        }
+
+        #progress-container h3 {
+            margin-top: 0;
+            color: #ff0000;
+        }
+
+        #progress-bar {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin: 15px 0;
+            overflow: hidden;
+            position: relative;
+            height: 30px;
+        }
+
+        #progress {
+            height: 100%;
+            background-color: #ff0000;
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        #status-info {
+            margin: 10px 0;
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        #download-btn {
+            display: none;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #ff0000;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+
+        #download-btn:hover {
+            background-color: #cc0000;
+        }
+
+        .alert {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .alert-error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Downloader</h1>
+        
+        <div id="error-alert" class="alert alert-error"></div>
+        
+        <form id="download-form">
+            <div class="form-group">
+                <input type="url" name="url" placeholder="Enter YouTube URL" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Download as:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="format" value="video" checked> Video (MP4)
+                    </label>
+                    <label>
+                        <input type="radio" name="format" value="audio"> Audio (MP3)
+                    </label>
+                </div>
+            </div>
+            
+            <button type="submit">Download</button>
+        </form>
+
+        <div id="progress-container">
+            <h3>Download Progress</h3>
+            <div id="progress-bar">
+                <div id="progress">0%</div>
+            </div>
+            <div id="status-info">
+                <p id="status">Waiting to start download...</p>
+                <div class="progress-stats">
+                    <span id="speed">Speed: --</span>
+                    <span id="eta">ETA: --</span>
+                </div>
+            </div>
+            <a id="download-btn" href="#" download>Save File</a>
+        </div>
+    </div>
+
+    <script>
+        let currentProgress = 0;
+        let downloadId = null;
+
+        document.getElementById('download-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const errorAlert = document.getElementById('error-alert');
+            
+            // Reset UI
+            errorAlert.style.display = 'none';
+            currentProgress = 0;
+            updateProgressBar(0);
+            document.getElementById('status').textContent = 'Starting download...';
+            document.getElementById('speed').textContent = 'Speed: --';
+            document.getElementById('eta').textContent = 'ETA: --';
+            document.getElementById('download-btn').style.display = 'none';
+            
+            // Show progress container
+            document.getElementById('progress-container').style.display = 'block';
+            
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to start download');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'started') {
+                    downloadId = data.download_id;
+                    checkProgress();
+                }
+            })
+            .catch(error => {
+                showError(error.message);
+            });
+        });
+
+        function updateProgressBar(percent) {
+            const progressBar = document.getElementById('progress');
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = Math.round(percent) + '%';
+            
+            // Change color based on progress
+            if (percent < 30) {
+                progressBar.style.backgroundColor = '#ff3333'; // Red
+            } else if (percent < 70) {
+                progressBar.style.backgroundColor = '#ff9900'; // Orange
+            } else {
+                progressBar.style.backgroundColor = '#33cc33'; // Green
+            }
+        }
+
+        function checkProgress() {
+            if (!downloadId) return;
+            
+            fetch(`/progress/${downloadId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to check progress');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        showError(data.error);
+                        return;
+                    }
+
+                    // Update progress if available
+                    if (data.progress) {
+                        const percentMatch = data.progress.match(/(\d+\.?\d*)%/);
+                        if (percentMatch) {
+                            currentProgress = parseFloat(percentMatch[1]);
+                            updateProgressBar(currentProgress);
+                            document.getElementById('status').textContent = data.progress;
+                        }
+                    }
+
+                    // Update stats
+                    if (data.speed) {
+                        document.getElementById('speed').textContent = 'Speed: ' + data.speed;
+                    }
+                    if (data.eta) {
+                        document.getElementById('eta').textContent = 'ETA: ' + data.eta;
+                    }
+
+                    // Check if download is complete
+                    if (currentProgress >= 99.9) {
+                        completeDownload();
+                    } else {
+                        // Continue checking progress every second
+                        setTimeout(checkProgress, 1000);
+                    }
+                })
+                .catch(error => {
+                    showError(error.message);
+                });
+        }
+
+        function completeDownload() {
+    fetch(`/progress/${downloadId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'completed') {
+                document.getElementById('status').textContent = 'Finalizing download...';
+                updateProgressBar(100);
+                
+                // Show download button
+                const downloadBtn = document.getElementById('download-btn');
+                downloadBtn.style.display = 'inline-block';
+                downloadBtn.href = `/download/${downloadId}`;
+                const format = document.querySelector('input[name="format"]:checked').value;
+                downloadBtn.textContent = 'Save as ' + (format === 'audio' ? 'MP3' : 'MP4');
+                downloadBtn.download = true;
+                
+                document.getElementById('status').textContent = 'Download complete! Ready to save.';
+            } else {
+                setTimeout(completeDownload, 1000);
+            }
+        })
+        .catch(error => {
+            setTimeout(completeDownload, 1000);
+        });
+}
+
+        function showError(message) {
+            document.getElementById('error-alert').textContent = 'Error: ' + message;
+            document.getElementById('error-alert').style.display = 'block';
+            document.getElementById('status').textContent = 'Download failed';
+            updateProgressBar(0);
+        }
+    </script>
+</body>
+</html>
