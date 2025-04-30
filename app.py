@@ -15,17 +15,14 @@ status_lock = Lock()
 
 def get_ydl_options(format_type, download_id):
     return {
-        'quiet': True,
-        'no_warnings': True,
-        'cookiefile': 'cookies.txt',  # Load cookies
+        'cookiefile': 'cookies.txt',  # Critical for bypassing 403
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'progress_hooks': [lambda d: progress_hook(d, download_id)],
-        'format': 'bestaudio/best' if format_type == 'audio' else 'best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-        }] if format_type == 'audio' else [],
-        'outtmpl': os.path.join(tempfile.gettempdir(), f'dl_{download_id}.%(ext)s'),
+        'extract_flat': 'in_network',  # Bypass age-gate
+        'throttled_rate': '1M',  # Mimic human speed
+        # Force IPv4 (many proxies are IPv6 blocked)
+        'socket_timeout': '30',
+        'force_ipv4': True,
+        'format': 'bestvideo[height<=720]+bestaudio/best' if format_type == 'video' else 'bestaudio',
     }
 
 def progress_hook(d, download_id):
